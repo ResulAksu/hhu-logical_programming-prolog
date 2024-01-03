@@ -69,7 +69,8 @@ list_to_disjunction([X|Xs], or(X, Disjunction))
 %% to_cnf(+Formula, -CNF).
 to_cnf(Formula, CNF) :-
     normalise(Formula, NFormula),
-    to_cnf_with_check(NFormula, NFormula, CNF).
+    to_cnf_with_check(NFormula, NFormula, CNFFormula),
+    cnf_transform(CNFFormula, CNF).
 
 to_cnf_with_check(Formula, PrevFormula, CNF) :-
     to_cnf_transformer(Formula, Transformed),
@@ -104,6 +105,29 @@ to_cnf_transformer(or(X, Y), or(NX, NY)) :-
 
 is_literal(X) :- atom(X).
 is_literal(not(X)) :- atom(X).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+cnf_transform(and(X, Y), CNF) :-
+    !, cnf_transform(X, CNFX),
+    cnf_transform(Y, CNFY),
+    append(CNFX, CNFY, CNF).
+
+cnf_transform(or(X, Y), [Clause]) :-
+    !, cnf_clause(X, ClauseX),
+    cnf_clause(Y, ClauseY),
+    append(ClauseX, ClauseY, Clause).
+
+cnf_transform(not(X), [[not(X)]]) :-
+    !.
+cnf_transform(X, [[X]]).
+
+cnf_clause(or(X, Y), Clause) :-
+    !, cnf_clause(X, ClauseX),
+    cnf_clause(Y, ClauseY),
+    append(ClauseX, ClauseY, Clause).
+
+cnf_clause(X, [X]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
