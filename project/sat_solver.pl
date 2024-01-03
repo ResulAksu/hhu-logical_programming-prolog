@@ -3,15 +3,13 @@
 :- load_test_files([]).
 
 %% normalise(+Formula, -NFormula).
+normalise(X, X) :- atom(X).
+
 normalise(lit(X), X) 
     :-!.
 
 normalise(not(implies(X, Y)), and(NX, NY)) 
     :-  normalise(X, NX), normalise(not(Y), NY).
-
-normalise(not(equivalence(X, Y)), and(NX, NY)) 
-    :-  normalise(not(implies(X,Y), NX)),
-       normalise(not(implies(Y,X), NY)).
 
 normalise(not(and(X,Y)), Norm)
     :- normalise(or(not(X),not(Y)), Norm).
@@ -32,11 +30,14 @@ normalise(or(X, Y), or(NX, NY))
     :-  normalise(X, NX), normalise(Y, NY).
 
 normalise(implies(X, Y), or(NX, NY)) 
-    :-  normalise(not(X), NX), normalise(Y, NY).
+    :- normalise(not(X), NX), normalise(Y, NY).
 
-normalise(equivalence(X, Y), and(NX, NY)) 
-    :-  normalise(implies(X,Y), NX),
-       normalise(implies(Y,X), NY).
+normalise(equivalence(X, Y), NormalisedForm) :-
+    normalise(not(X), NX),
+    normalise(not(Y), NY),
+    normalise(or(NX, Y), LeftPart),
+    normalise(or(X, NY), RightPart),
+    NormalisedForm = and(LeftPart, RightPart).
 
 normalise(min_one_pos(Vars), NormalisedForm)
     :- list_to_disjunction(Vars,Disjunction),
@@ -66,42 +67,43 @@ list_to_disjunction([X|Xs], or(X, Disjunction))
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% to_cnf(+Formula, -CNF).
-% Entry point for CNF conversion
 to_cnf(Formula, CNF) :-
     normalise(Formula, NFormula),
-    to_cnf_transformer(NFormula, CNF).
+    to_cnf_with_check(NFormula, NFormula, CNF).
 
-% Base case for literals and negated literals
+to_cnf_with_check(Formula, PrevFormula, CNF) :-
+    to_cnf_transformer(Formula, Transformed),
+    (Transformed == PrevFormula -> CNF = Transformed;  
+     is_cnf(Transformed) -> CNF = Transformed;       
+     is_dnf(Transformed) -> to_cnf_with_check(Transformed, Formula, CNF);  
+     CNF = Transformed).                            
+
+
+is_cnf(and(_,_)) :- !.
+is_cnf(X) :- is_literal(X).
+is_cnf(not(X)) :- is_literal(X).
+
+is_dnf(or(_,_)) :- !.
+is_dnf(X) :- is_literal(X).
+is_dnf(not(X)) :- is_literal(X).
+
 to_cnf_transformer(X, X) :- is_literal(X), !.
+to_cnf_transformer(not(X), not(NX)) :- is_literal(X), !, NX = X.
 
-to_cnf_transformer(not(X), not(NX)) 
-    :- !, to_cnf_transformer(X,NX).
-
-to_cnf_transformer(and(or(X,Y), or(Z,ZZ)), [[NX,NY],[NZ,NZZ]]) 
-    :- !, to_cnf_transformer(X,NX), to_cnf_transformer(Y,NY), to_cnf_transformer(Z,NZ), to_cnf_transformer(ZZ,NZZ).
-
-
-to_cnf_transformer(and(or(X,Y), Z), [[NX,NY],[NZ]]) 
-    :- !, to_cnf_transformer(X,NX), to_cnf_transformer(Y,NY), to_cnf_transformer(Z,NZ).
-
-to_cnf_transformer(and(Z,or(X,Y)), [[NZ], [NX,NY]]) 
-    :- !, to_cnf_transformer(X,NX), to_cnf_transformer(Y,NY), to_cnf_transformer(Z,NZ).
-
-to_cnf_transformer(and(X,Y), [[NX],[NY]]) 
-    :- !, to_cnf_transformer(X,NX), to_cnf_transformer(Y,NY).
-
-% Distributive laws for or
 to_cnf_transformer(or(X, and(Y, Z)), NormalisedForm) :-
-    !, to_cnf_transformer(or(X, Y), NX), to_cnf_transformer(or(X, Z), NZ), to_cnf_transformer(and(NX,NZ), NormalisedForm).
+    !, to_cnf_transformer(or(X, Y), NX), to_cnf_transformer(or(X, Z), NZ), to_cnf_transformer(and(NX, NZ), NormalisedForm).
 
-to_cnf_transformer(or(and(Y, Z), X), NormalisedForm) 
-:- !, to_cnf_transformer(or(Y, X), NX), to_cnf_transformer(or(Z, X), NZ), to_cnf_transformer(and(NX,NZ), NormalisedForm).
+to_cnf_transformer(or(and(Y, Z), X), NormalisedForm) :-
+    !, to_cnf_transformer(or(Y, X), NY), to_cnf_transformer(or(Z, X), NZ), to_cnf_transformer(and(NY, NZ), NormalisedForm).
 
-to_cnf_transformer(or(X, Y), [NX,NY]) 
-    :- !, to_cnf_transformer(X, NX), to_cnf_transformer(Y, NY).
+to_cnf_transformer(and(X, Y), and(NX, NY)) :-
+    !, to_cnf_transformer(X, NX), to_cnf_transformer(Y, NY).
+
+to_cnf_transformer(or(X, Y), or(NX, NY)) :-
+    !, to_cnf_transformer(X, NX), to_cnf_transformer(Y, NY).
 
 is_literal(X) :- atom(X).
-is_literal(not(X)) :- atom(X). 
+is_literal(not(X)) :- atom(X).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
