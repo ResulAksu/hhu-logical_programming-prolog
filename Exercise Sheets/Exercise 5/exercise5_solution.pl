@@ -94,7 +94,6 @@ coprime(X,Y) :-
     gcd(X,Y,GCD),
     GCD == 1.
 
-% Goes down to 1 and than adds all the items recursively
 
 range_1(N, []) :- N =< 1.
 range_1(N, L) :-

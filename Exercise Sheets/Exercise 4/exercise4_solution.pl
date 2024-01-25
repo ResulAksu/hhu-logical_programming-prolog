@@ -1,8 +1,6 @@
 :- use_module(library(plunit)).
 
-% Task is to remove consecutive duplicated, what happens here is that we take as Input: List (with duplicates) , List (to fill)
-% We call List (Head (A,B) | TAIL) and compare both heads, with equal we do nothing and skip B, if not equal we pass A to toFillList 
-% End when base case is reached (empty input list)
+% task 3
 
 compress([], []).
 compress([A], [A]).
@@ -14,7 +12,7 @@ compress([A,B|T], [A|L]) :-
     A \== B,
     compress([B|T], L).
 
-% Traversing a tree in 3 different styles
+% task 4
 
 inorder(nil, []).
 % inorder(node(V, nil, nil), [V]).
@@ -36,7 +34,7 @@ postorder(node(V, Left, Right), L) :-
     append(L2, [V], L3),
     append(L1, L3, L).
 
-% Reversing a List
+% task 5
 
 t(L, NL) :-
     t(L, [], NL). % start with [] as accumulator

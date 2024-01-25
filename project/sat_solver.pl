@@ -2,143 +2,148 @@
 :- load_test_files([]).
 
 %% normalise(+Formula, -NFormula).
-normalise(lit(X), X) :-
-    is_literal(X), !.
 
-normalise(not(implies(X, Y)), and(NX, NY)) 
-    :- !,  normalise(X, NX), normalise(not(Y), NY).
+normalise(Formula,NFormula):-
+    normalisation(Formula,Temp),
+    (Formula \= Temp -> normalisation(Temp, NFormula); NFormula = Temp).
 
-normalise(not(and(X,Y)), Norm)
-    :- !, normalise(or(not(X),not(Y)), Norm).
+normalisation(lit(X), lit(X)) :- !.
 
-normalise(not(or(X,Y)), Norm)
-    :- !, normalise(and(not(X),not(Y)), Norm).
+normalisation(not(implies(X, Y)), and(NX, not(NY))) 
+    :- !, normalisation(X, NX), normalise(Y, NY).
 
-normalise(not(not(X)), NormalisedX) :-
-    !, normalise(X, NormalisedX).
+normalisation(not(and(not(X), not(Y))), or(NX, NY)) 
+    :- !, normalisation(X, NX), normalise(Y, NY).
 
-normalise(not(X), not(NX)) 
-    :- !, normalise(X,NX).
+normalisation(not(and(X,Y)), Norm)
+    :- !, normalisation(or(not(X),not(Y)), Norm).
 
-normalise(and(X,Y), and(NX,NY)) 
-    :-!, normalise(X,NX), normalise(Y,NY).
+normalisation(not(or(X,Y)), Norm)
+    :- !, normalisation(and(not(X),not(Y)), Norm).
 
-normalise(or(X, Y), or(NX, NY)) 
-    :- !, normalise(X, NX), normalise(Y, NY).
+normalisation(not(not(X)), NormalisedX) :-
+    !, normalisation(X, NormalisedX).
 
-normalise(implies(X, Y), or(NX, NY)) 
-    :- !,normalise(not(X), NX), normalise(Y, NY).
+normalisation(not(X), not(NX)) 
+    :- !, normalisation(X,NX).
 
-normalise(equivalence(X, Y), NormalisedForm) :- !,
-    normalise(or(not(X), Y), LeftPart),
-    normalise(or(X, not(Y)), RightPart),
+normalisation(and(X,Y), and(NX,NY)) 
+    :-!, normalisation(X,NX), normalisation(Y,NY).
+
+normalisation(or(X, Y), or(NX, NY)) 
+    :- !, normalisation(X, NX), normalisation(Y, NY).
+
+normalisation(implies(X, Y), or(NX, NY)) 
+    :- !,normalisation(not(X), NX), normalisation(Y, NY).
+
+normalisation(equivalence(X, Y), NormalisedForm) :- !,
+    normalisation(or(not(X), Y), LeftPart),
+    normalisation(or(X, not(Y)), RightPart),
     NormalisedForm = and(LeftPart, RightPart).
 
-normalise(min_one_pos(Vars), NormalisedForm)
+normalisation(min_one_pos(Vars), NormalisedForm)
     :- !, list_to_disjunction(Vars,Disjunction),
-        normalise(Disjunction, NormalisedForm).
+        normalisation(Disjunction, NormalisedForm).
 
-normalise(exactly_one_pos(Literals), NormalisedForm) :- !,
+normalisation(exactly_one_pos(Literals), NormalisedForm) :- !,
     pairwise_negation(Literals, PairwiseNegations),
     list_to_disjunction(Literals, AtLeastOne),
     append(PairwiseNegations, [AtLeastOne], AllClauses),
     list_to_conjunction(AllClauses, Conjunctions),
-    normalise(Conjunctions, NormalisedForm).
+    normalisation(Conjunctions, NormalisedForm).
 
-pairwise_negation([], []).
-pairwise_negation([Lit|Lits], PairwiseNegations) :-
+pairwise_negation([], []) :- !.
+pairwise_negation([Lit|Lits], PairwiseNegations) :- !,
     pairwise_negate(Lit, Lits, NegationsForLit),
     pairwise_negation(Lits, RemainingNegations),
     append(NegationsForLit, RemainingNegations, PairwiseNegations).
 
-pairwise_negate(_, [], []).
-pairwise_negate(Lit1, [Lit2|Lits], [OrClause|Rest]) :-
+pairwise_negate(_, [], []) :- !.
+pairwise_negate(Lit1, [Lit2|Lits], [OrClause|Rest]) :- !,
     Lit1 @< Lit2,
     OrClause = or(not(Lit1), not(Lit2)),
     pairwise_negate(Lit1, Lits, Rest).
-pairwise_negate(Lit1, [_|Lits], Rest) :-
+pairwise_negate(Lit1, [_|Lits], Rest) :- !,
     pairwise_negate(Lit1, Lits, Rest).
 
-list_to_conjunction([X], X).
+list_to_conjunction([X], X) :- !.
 list_to_conjunction([X|Xs], and(X, Conjunction)) 
-    :-list_to_conjunction(Xs, Conjunction).
+    :- !, list_to_conjunction(Xs, Conjunction).
 
-list_to_disjunction([X], X).
+list_to_disjunction([X], X) :- !.
 list_to_disjunction([X|Xs], or(X, Disjunction)) 
-    :-list_to_disjunction(Xs, Disjunction).
+    :- !, list_to_disjunction(Xs, Disjunction).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+cleanup(lit(X), X) :- !.
+
+cleanup(and(X, Y), and(CleanX, CleanY)) :- 
+    !, cleanup(X, CleanX), cleanup(Y, CleanY).
+
+cleanup(or(X, Y), or(CleanX, CleanY)) :- 
+    !, cleanup(X, CleanX), cleanup(Y, CleanY).
+
+cleanup(not(X), not(CleanX)) :- 
+    !, cleanup(X, CleanX).
+cleanup(X, X).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% to_cnf(+Formula, -CNF).
 to_cnf(Formula, CNF) :-
     normalise(Formula, NFormula),
-    to_cnf_with_check(NFormula, NFormula, CNFFormula),
-    cnf_transform(CNFFormula, CNF).
-
-to_cnf_with_check(Formula, PrevFormula, CNF) :-
-    to_cnf_transformer(Formula, Transformed),
-    ( Transformed == PrevFormula -> CNF = Transformed;  % Base case: no further transformation
-      is_cnf(Transformed) -> CNF = Transformed;         % Base case: already in CNF
-      % Recursive case: Transform until no changes
-      to_cnf_with_check(Transformed, Transformed, CNF)
-    ).
-                         
-
-is_cnf(and(_,_)) :- !.
-is_cnf(X) :- is_literal(X).
-is_cnf(not(X)) :- is_literal(X).
-
-is_dnf(or(_,_)) :- !.
-is_dnf(X) :- is_literal(X).
-is_dnf(not(X)) :- is_literal(X).
+    cleanup(NFormula, CleanFormula),
+    to_cnf_transformer(CleanFormula, CNFFormula),
+    cnf_transform(CNFFormula, CNF), !.
 
 
 to_cnf_transformer(X, CNF) :-
     is_literal(X), !, CNF = X. % Base case for literals
 
 to_cnf_transformer(and(X, Y), and(CNF_X, CNF_Y)) :-
+    !,
     to_cnf_transformer(X, CNF_X),
     to_cnf_transformer(Y, CNF_Y).
 
 to_cnf_transformer(or(X, Y), CNF) :-
-    ( is_literal(X), is_literal(Y) -> CNF = or(X, Y) % Base case for disjunction of literals
-    ; is_literal(X) -> distribute_or(X, Y, CNF) % Distribute X over Y
-    ; is_literal(Y) -> distribute_or(Y, X, CNF) % Distribute Y over X
+    !,
+    ( is_literal(X), is_literal(Y) -> CNF = or(X, Y)
+    ; is_literal(X) -> distribute_or(X, Y, CNF) 
+    ; is_literal(Y) -> distribute_or(Y, X, CNF)
     ; to_cnf_transformer(X, CNF_X), to_cnf_transformer(Y, CNF_Y), distribute_or(CNF_X, CNF_Y, CNF)
     ).
 
-% Helper predicate to distribute disjunction over conjunction
+distribute_or(X, Y, or(X, Y)).
 distribute_or(X, and(Y, Z), and(CNF1, CNF2)) :-
     to_cnf_transformer(or(X, Y), CNF1),
     to_cnf_transformer(or(X, Z), CNF2).
 
-distribute_or(X, Y, or(X, Y)). % Base case for distribution
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-cnf_transform(X, [[X]]) :- 
-    is_literal(X),!.
-
-cnf_transform(not(X), [[not(X)]]) :-
-    is_literal(X),!.
+% List of Lists Approach
+cnf_transform(X, [[X]]) :- is_literal(X), !.
+cnf_transform(not(X), [[not(X)]]) :- !,is_literal(X), !.
 
 cnf_transform(and(X, Y), CNF) :-
-    !, cnf_transform(X, CNFX),
+    cnf_transform(X, CNFX),
     cnf_transform(Y, CNFY),
     append(CNFX, CNFY, CNF).
 
-cnf_transform(or(X, Y), [Clause]) :-
-    !, cnf_clause(X, ClauseX),
-    cnf_clause(Y, ClauseY),
-    append(ClauseX, ClauseY, Clause).
+cnf_transform(or(X, Y), CNF) :-
+    cnf_transform(X, CNFX),
+    cnf_transform(Y, CNFY),
+    distribute_or_(CNFX, CNFY, CNF).
 
-cnf_clause(X, [X]) :- is_literal(X), !.
+distribute_or_([], _, []).
+distribute_or_([H|T], CNFY, CNF) :-
+    distribute_or_clause(H, CNFY, CNF1),
+    distribute_or_(T, CNFY, CNF2),
+    append(CNF1, CNF2, CNF).
 
-cnf_clause(or(X, Y), Clause) :-
-    !, cnf_clause(X, ClauseX),
-    cnf_clause(Y, ClauseY),
-    append(ClauseX, ClauseY, Clause).
+distribute_or_clause(_, [], []).
+distribute_or_clause(ClauseX, [ClauseY|T], [CNF|CNFs]) :-
+    append(ClauseX, ClauseY, CNF),
+    distribute_or_clause(ClauseX, T, CNFs).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -152,92 +157,67 @@ is_literal(false) :- !.
 
 %% solve(+CNF)
 solve(CNF) :-
-    unit_propagation(CNF, PropagatedCNF),
-    check_cnf_status(PropagatedCNF, Status),
-    (   Status = unsat -> fail       % If UNSAT after unit propagation, fail immediately.
-    ;   Status = sat -> true         % If CNF is empty after unit propagation, succeed.
-    ;   branch(PropagatedCNF)        % Otherwise, perform variable branching.
-    ).
+    davis_putnam_logemann_loveland(CNF).
 
-% Branching on a variable
-branch(CNF) :-
-    select_var(CNF, Var),            % Select an unassigned variable
-    (   propagate_and_solve(Var, CNF)  % Propagate true, then solve
-    ;   propagate_and_solve(not(Var), CNF)  % Propagate false, then solve
-    ).
+davis_putnam_logemann_loveland([]).
+davis_putnam_logemann_loveland(CNF) :- 
+    select([Unit], CNF, NewCNF), !,
+    assign_value_to_Unit(Unit),
+    propagate_simplify(NewCNF,SimplifiedCNF),
+    davis_putnam_logemann_loveland(SimplifiedCNF).
+davis_putnam_logemann_loveland(CNF) :-
+    \+ (member(Unit,CNF), is_unit_clause(Unit)),
+    assign_value_to_random(CNF),
+    propagate_simplify(CNF, SimplifiedCNF),
+    davis_putnam_logemann_loveland(SimplifiedCNF).
 
-propagate_and_solve(Var, CNF) :-
-    propagate_unit(Var, CNF, ModifiedCNF),  % Apply the variable assignment
-    solve(ModifiedCNF).                     % Recursively solve the modified CNF
+assign_value_to_Unit(X) :-
+    ( var(X) -> X = true ; X = not(Y), var(Y) -> Y = false).
 
-% Select a variable to branch on
-select_var(CNF, Var) :-
-    findall(V, (member(Clause, CNF), member(Lit, Clause), var_lit(Lit, V)), Vars),
-    list_to_set(Vars, VarSet),
-    member(Var, VarSet).
+is_unit_clause([X]) :- var(X); X == true; X == false.               
+is_unit_clause([not(X)]) :- var(X). 
 
-% Extract variable from a literal (either positive or negated)
-var_lit(X, X) :- var(X); X == true; X == false, !.
-var_lit(not(X), X) :- var(X).
+assign_value_to_random(CNF) :- 
+    select_unassigned_variable(CNF, Var),
+    (Var = true ; Var = false). % choice point
 
-unit_propagation(CNF, CNF) :- % Base case: stop when no unit clause is found
-    \+ (member(Unit, CNF), is_unit_clause(Unit)),
+select_unassigned_variable(CNF, Var) :-
+    member(Clause, CNF),
+    member(Literal, Clause),
+    var(Literal),
+    Var = Literal,
     !.
-
-unit_propagation(CNF, NNCNF) :- 
-    member(Unit, CNF),
-    is_unit_clause(Unit),
-    propagate_unit(Unit, CNF, NCNF),
-    unit_propagation(NCNF, NNCNF).
-
-contains_var(Var, [H|_]) :- 
-    get_single_element(Var,SVar),     
-    H == SVar,   
-    !.
-contains_var(Var, [_|T]) :-
-    contains_var(T, Var).
-
-get_single_element([Element], Element).
-
-contains_neg_var(Var, [H|_]) :-
-    get_single_element(Var,SVar),
-    match(H,not(SVar)), !.           
-contains_neg_var(Var, [_|T]) :-
-    contains_neg_var(Var, T).
-
-propagate_unit(Var, CNF, NCNF) :-
-    process_clauses(Var, CNF, NCNF).
-
-
-process_clauses(_, [], []). 
-process_clauses(Var, [Clause|Rest], Result) :-
-    (   contains_var(Var, Clause)
-    ->  process_clauses(Var, Rest, Result)  % Skip the clause if it contains Var
-    ;   
-    contains_neg_var(Var, Clause)
-        -> get_single_element(Var, SVar),
-     del(not(SVar), Clause, NewClause), 
+    
+propagate_simplify([], []). 
+propagate_simplify([Clause|Rest], Result) :-
+    (   member_(Clause, true)
+    ->  propagate_simplify(Rest, Result) 
+        ;   
+        member_(Clause, not(false))
+    -> propagate_simplify(Rest, Result)
+        ;
+        member_(Clause, false)
+        -> 
+     del(false, Clause, NewClause), 
         Result = [NewClause|NewRest], 
-        process_clauses(Var, Rest, NewRest)
+        propagate_simplify(Rest, NewRest)
+    ;
+        member_(Clause, not(true))
+        -> 
+     del(not(true), Clause, NewClause), 
+        Result = [NewClause|NewRest], 
+        propagate_simplify(Rest, NewRest)
     ;   Result = [Clause|NewRest], 
-        process_clauses(Var, Rest, NewRest)
+        propagate_simplify(Rest, NewRest)
     ).
 
-del(Y,[Y],[]).
-del(X,[X|LIST1],LIST1).
-del(X,[Y|LIST], [Y|LIST1]) :-del(X,LIST,LIST1).
+% write own helper because of unification of member
 
-match(H,SVar) :- 
-    H == SVar;
-    not(not(H)) == SVar.
+del(_,[],[]) :-!.
+del(X,[H|T],LIST1):- X == H, del(X,T,LIST1).
+del(X,[H|T],[H|LIST1]) :- X \== H, del(X,T,LIST1).
 
-is_unit_clause([X]) :- var(X); X == true; X == false, !.                  % Single variable
-is_unit_clause([not(X)]) :- var(X), !.             % Single negated variable
-
-check_cnf_status([], sat).
-check_cnf_status(CNF, Status) :-
-    % Check if there is an empty clause in the CNF.
-    (   member([], CNF)
-    ->  Status = unsat
-    ;   Status = undefined
-    ).
+member_([H|_], Term) :-
+    (nonvar(H), H == Term -> H = Term).
+member_([_|T], Term) :-
+    member_(T, Term).

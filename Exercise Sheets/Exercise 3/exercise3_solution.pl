@@ -1,8 +1,8 @@
 :- use_module(library(plunit)).
 
-% Implementation of an specific DFA on exercise-3.pdf
+% task 3
 
-delta(1, d, 2). 
+delta(1, d, 2).
 delta(2, a, 2).
 delta(2, b, 2).
 delta(2, c, 3).
@@ -11,12 +11,7 @@ delta(2, e, 5).
 delta(3, d, 6).
 delta(6, c, 5).
 
-% When in acceppt([I|L],K) is asked about delta it returns true if delta is defined
-% [I|L] splits the List L from accept(L), with I as its header. accept(L) checks, if start S is defined below
-
 start(1).
-
-% When the List L is empty it checks below if the final condition is a "final"
 
 final(4).
 final(5).
@@ -32,8 +27,17 @@ accept(L) :-
     start(S).
 
 
-% Implementation of checking if a proposition is true in the form of giving the following Input:  ?- is_true( or(not(and(cst(true), cst(A))), cst(B))).
-% given: and/2, or/2 and not/1
+% More complex, less generic:
+%dfa([], 4). % final
+%dfa([], 5). % final
+
+%dfa([I|L], K) :-
+%    delta(K, I, O),
+%    dfa(L, O).
+
+%accept(L) :- dfa(L, 1). % start
+
+% task 4
 
 is_true(cst(true)).
 is_true(and(X,Y)) :-
@@ -58,7 +62,6 @@ is_false(not(X)) :-
     is_true(X).
 
 
-% ------------------------------------------------------------ TESTS -------------------------------------------------------------
 :- begin_tests(automaton).
 
 test(accept,[nondet]) :-
